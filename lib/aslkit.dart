@@ -3,6 +3,7 @@ library;
 
 export 'package:pscore/pscore.dart';
 
+export 'src/codec/asl_codec.dart';
 export 'src/codec/asl_decoder.dart';
 export 'src/codec/asl_encoder.dart';
 export 'src/model/asl_descriptor.dart';

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:aslkit/src/model/asl_file.dart';
@@ -7,7 +8,21 @@ import 'package:aslkit/src/model/asl_style.dart';
 import 'package:pscore/pscore.dart';
 
 /// Encodes immutable ASL models into Photoshop style-library bytes.
-abstract final class AslEncoder {
+///
+/// The configured instance is a one-shot [Converter] for complete in-memory
+/// files. Use [encode] when conversion options are supplied per call.
+final class AslEncoder extends Converter<AslFile, List<int>> {
+  /// Options applied by [convert].
+  final AslEncodeOptions options;
+
+  /// Creates a reusable encoder with fixed [options].
+  const AslEncoder({
+    this.options = const AslEncodeOptions(),
+  });
+
+  @override
+  Uint8List convert(AslFile input) => encode(input, options: options);
+
   /// Four-byte signature used by every Photoshop style collection.
   static const String _fileSignature = '8BSL';
 

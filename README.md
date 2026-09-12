@@ -79,6 +79,22 @@ final Uint8List reconstructed = AslEncoder.encode(
 
 Embedded pattern pixels are decoded semantically but currently written from their preserved binary record. Keep `preservePatternRecordData` enabled when an ASL file containing patterns must be saved again. Creating new pattern pixel records from raw images belongs in a future shared PsCore encoder.
 
+## Reusable `dart:convert` API
+
+`AslCodec` implements `Codec<AslFile, List<int>>` and keeps decoding and encoding policies together in one immutable value:
+
+```dart
+const AslCodec codec = AslCodec(
+  decodeOptions: AslDecodeOptions(mode: AslDecodeMode.strict),
+  encodeOptions: AslEncodeOptions(mode: AslEncodeMode.strict),
+);
+
+final AslFile file = codec.decode(bytes);
+final Uint8List output = codec.encode(file);
+```
+
+The `List<int>` binary type allows composition with standard codecs such as `base64`; direct `encode` calls still return `Uint8List`. `AslEncoder` and `AslDecoder` are also configurable `Converter` implementations. Every conversion consumes or produces one complete in-memory ASL file rather than an incremental byte stream.
+
 ## Strict, tolerant, and bounded decoding
 
 Tolerant decoding is the default. Because styles and patterns are length-bounded, a malformed record is retained as an opaque `AslStyle` or `AslPatternRecord` and decoding continues at the next reliable boundary. If an unknown Action Descriptor value type cannot be sized safely, only that style record becomes opaque.

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:aslkit/src/codec/asl_hierarchy_mapper.dart';
@@ -12,7 +13,24 @@ import 'package:aslkit/src/model/asl_style.dart';
 import 'package:pscore/pscore.dart';
 
 /// Decodes standalone ASL libraries and Photoshop styles-palette payloads.
-abstract final class AslDecoder {
+///
+/// The configured instance is a one-shot [Converter] for complete in-memory
+/// files. Use [decode] when conversion options are supplied per call.
+final class AslDecoder extends Converter<List<int>, AslFile> {
+  /// Options applied by [convert].
+  final AslDecodeOptions options;
+
+  /// Creates a reusable decoder with fixed [options].
+  const AslDecoder({
+    this.options = const AslDecodeOptions(),
+  });
+
+  @override
+  AslFile convert(List<int> input) => decode(
+    input is Uint8List ? input : Uint8List.fromList(input),
+    options: options,
+  );
+
   /// Four-byte signature used by every Photoshop style collection.
   static const String _fileSignature = '8BSL';
 
