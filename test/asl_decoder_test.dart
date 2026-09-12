@@ -86,6 +86,27 @@ void main() {
       check(AslEncoder.encode(file)).deepEquals(bytes);
     });
 
+    test('accepts an effectless default style in strict mode', () {
+      final Uint8List bytes = AslFixtureBuilder.file(
+        styles: <Uint8List>[
+          AslFixtureBuilder.style(
+            name: 'Default Style (None)',
+            id: 'default-style-id',
+            layerEffects: null,
+          ),
+        ],
+      );
+
+      final AslFile file = AslDecoder.decode(
+        bytes,
+        options: const AslDecodeOptions(mode: AslDecodeMode.strict),
+      );
+
+      check(file.styles.single.hasUsableStyleData).isFalse();
+      check(file.warnings).isEmpty();
+      check(AslEncoder.encode(file)).deepEquals(bytes);
+    });
+
     test('resolves localized ZString names while preserving serialized text', () {
       final Uint8List bytes = AslFixtureBuilder.file(
         styles: <Uint8List>[

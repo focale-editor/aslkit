@@ -34,12 +34,6 @@ final class AslDecoder extends Converter<List<int>, AslFile> {
   /// Four-byte signature used by every Photoshop style collection.
   static const String _fileSignature = '8BSL';
 
-  /// Four-byte signature used by ordinary Photoshop tagged blocks.
-  static const String _taggedBlockSignature = '8BIM';
-
-  /// Alternate signature whose tagged-block length occupies eight bytes.
-  static const String _largeTaggedBlockSignature = '8B64';
-
   /// Standalone ASL version currently written by Photoshop.
   static const int _fileVersion = 2;
 
@@ -356,27 +350,29 @@ final class AslDecoder extends Converter<List<int>, AslFile> {
       baseOffset: recordOffset + 4,
     );
     final int identificationVersionOffset = reader.baseOffset + reader.offset;
-    final int identificationVersion = reader.readUint32();
-    if (identificationVersion != _descriptorVersion) {
-      context.issue('Style identification descriptor version $identificationVersion is not currently defined', identificationVersionOffset);
-    }
-    final PsDescriptor identification = PsDescriptorCodec.decodeReader(
+    final PsVersionedDescriptor identificationValue = PsVersionedDescriptorCodec.read(
       reader,
       options: context.options.descriptorOptions,
     );
+    final int identificationVersion = identificationValue.version;
+    final PsDescriptor identification = identificationValue.descriptor;
+    if (identificationVersion != _descriptorVersion) {
+      context.issue('Style identification descriptor version $identificationVersion is not currently defined', identificationVersionOffset);
+    }
     if (identification.classId != 'null') {
       context.issue('Style identification descriptor uses unexpected class "${identification.classId}"', identificationVersionOffset + 4);
     }
 
     final int styleVersionOffset = reader.baseOffset + reader.offset;
-    final int styleVersion = reader.readUint32();
-    if (styleVersion != _descriptorVersion) {
-      context.issue('Style information descriptor version $styleVersion is not currently defined', styleVersionOffset);
-    }
-    final PsDescriptor styleDescriptor = PsDescriptorCodec.decodeReader(
+    final PsVersionedDescriptor styleValue = PsVersionedDescriptorCodec.read(
       reader,
       options: context.options.descriptorOptions,
     );
+    final int styleVersion = styleValue.version;
+    final PsDescriptor styleDescriptor = styleValue.descriptor;
+    if (styleVersion != _descriptorVersion) {
+      context.issue('Style information descriptor version $styleVersion is not currently defined', styleVersionOffset);
+    }
     if (styleDescriptor.classId != 'Styl') {
       context.issue('Style information descriptor uses unexpected class "${styleDescriptor.classId}"', styleVersionOffset + 4);
     }
@@ -385,10 +381,7 @@ final class AslDecoder extends Converter<List<int>, AslFile> {
     if (recordTrailingData.length > 3 || _containsNonzero(recordTrailingData)) {
       context.issue('${recordTrailingData.length} extension bytes remain after the style descriptors', reader.baseOffset + reader.offset - recordTrailingData.length);
     }
-    final String? serializedName = switch (identification.value('Nm  ')) {
-      PsStringValue(:final String value) => value,
-      _ => null,
-    };
+    final String? serializedName = identification.stringValue('Nm  ', trimTerminalNulls: false);
     final String? normalizedName = serializedName == null ? null : _trimTerminalNulls(serializedName);
     final String? id = identification.aslString('Idnt');
     if (normalizedName == null || normalizedName.isEmpty) {
@@ -402,11 +395,8 @@ final class AslDecoder extends Converter<List<int>, AslFile> {
     final PsDescriptor? layerEffectsDescriptor = styleDescriptor.aslObject('Lefx');
     final PsDescriptor? blendOptionsDescriptor = styleDescriptor.aslObject('blendOptions');
     _validateObjectValue(styleDescriptor, 'documentMode', documentModeDescriptor, context, styleVersionOffset);
-    _validateObjectValue(styleDescriptor, 'Lefx', layerEffectsDescriptor, context, styleVersionOffset);
+    _validateObjectValue(styleDescriptor, 'Lefx', layerEffectsDescriptor, context, styleVersionOffset, required: false);
     _validateObjectValue(styleDescriptor, 'blendOptions', blendOptionsDescriptor, context, styleVersionOffset, required: false);
-    if (layerEffectsDescriptor == null && blendOptionsDescriptor == null) {
-      context.issue('Style contains neither layer effects nor blending options', styleVersionOffset);
-    }
 
     return AslStyle(
       index: index,
@@ -480,7 +470,7 @@ final class AslDecoder extends Converter<List<int>, AslFile> {
   static void _decodeTaggedBlocks(PsBinaryReader reader, _AslDecodeContext context) {
     while (!reader.isAtEnd) {
       final int blockOffset = reader.baseOffset + reader.offset;
-      if (reader.remaining < 12 || !_hasTaggedSignature(reader, 0)) {
+      if (reader.remaining < 12 || !PsTaggedBlockCodec.hasSignature(reader)) {
         final Uint8List trailing = reader.readBytes(reader.remaining);
         context.setTrailing(trailing);
         context.issue('${trailing.length} unrecognized trailing bytes remain after the ASL payload', blockOffset);
@@ -494,7 +484,7 @@ final class AslDecoder extends Converter<List<int>, AslFile> {
         );
       }
 
-      final bool usesWideLength = _hasLargeTaggedSignature(reader);
+      final bool usesWideLength = PsTaggedBlockCodec.usesWideLengthSignature(reader);
       if (usesWideLength && reader.remaining < 16) {
         final Uint8List trailing = reader.readBytes(reader.remaining);
         context.setTrailing(trailing);
@@ -502,18 +492,15 @@ final class AslDecoder extends Converter<List<int>, AslFile> {
         return;
       }
 
-      final String signature = reader.readString(4);
-      final String key = reader.readString(4);
-      final int declaredLength = usesWideLength ? reader.readUint64() : reader.readUint32();
-      final int payloadOffset = blockOffset + (usesWideLength ? 16 : 12);
+      final PsTaggedBlockHeader header = PsTaggedBlockCodec.readHeader(
+        reader,
+        maxPayloadBytes: context.options.maxTaggedBlockBytes,
+      );
+      final String signature = header.signature;
+      final String key = header.key;
+      final int declaredLength = header.declaredLength;
+      final int payloadOffset = header.payloadOffset;
       context.blockKey = key;
-      if (declaredLength > context.options.maxTaggedBlockBytes) {
-        throw AslFormatException(
-          message: 'ASL tagged block $key length $declaredLength exceeds the configured ${context.options.maxTaggedBlockBytes} byte limit',
-          source: context.source,
-          offset: blockOffset + 8,
-        );
-      }
       if (declaredLength > reader.remaining) {
         final Uint8List available = reader.readView(reader.remaining);
         context.addTaggedBlock(
@@ -533,7 +520,10 @@ final class AslDecoder extends Converter<List<int>, AslFile> {
       }
 
       final Uint8List payload = reader.readView(declaredLength);
-      final int paddingLength = _taggedPaddingLength(reader, declaredLength);
+      final int paddingLength = PsTaggedBlockCodec.paddingLength(
+        reader,
+        payloadLength: declaredLength,
+      );
       final Uint8List paddingData = reader.readBytes(paddingLength);
       context.addTaggedBlock(
         AslTaggedBlock(
@@ -570,14 +560,14 @@ final class AslDecoder extends Converter<List<int>, AslFile> {
         bytes: payload,
         baseOffset: payloadOffset,
       );
-      final int version = reader.readUint32();
-      if (version != _descriptorVersion) {
-        context.issue('ASL hierarchy descriptor version $version is not currently defined', payloadOffset);
-      }
-      final PsDescriptor descriptor = PsDescriptorCodec.decodeReader(
+      final PsVersionedDescriptor versioned = PsVersionedDescriptorCodec.read(
         reader,
         options: context.options.descriptorOptions,
       );
+      if (versioned.version != _descriptorVersion) {
+        context.issue('ASL hierarchy descriptor version ${versioned.version} is not currently defined', payloadOffset);
+      }
+      final PsDescriptor descriptor = versioned.descriptor;
       if (!reader.isAtEnd) {
         context.issue('${reader.remaining} extension bytes remain after the ASL hierarchy descriptor', reader.baseOffset + reader.offset);
       }
@@ -606,43 +596,6 @@ final class AslDecoder extends Converter<List<int>, AslFile> {
       context.warning('ASL hierarchy could not be decoded: ${error.message}', error.offset ?? payloadOffset);
     }
   }
-
-  /// Returns optional zero padding before the next recognizable tagged block.
-  static int _taggedPaddingLength(PsBinaryReader reader, int payloadLength) {
-    if (_hasTaggedSignature(reader, 0)) {
-      return 0;
-    }
-    final int expectedLength = (4 - payloadLength % 4) % 4;
-    if (expectedLength == 0 || reader.remaining < expectedLength || !_allZero(reader, expectedLength)) {
-      return 0;
-    }
-    if (reader.remaining == expectedLength || _hasTaggedSignature(reader, expectedLength)) {
-      return expectedLength;
-    }
-    return 0;
-  }
-
-  /// Tests whether the first [length] remaining bytes are all zero.
-  static bool _allZero(PsBinaryReader reader, int length) {
-    for (int index = 0; index < length; index++) {
-      if (reader.bytes[reader.offset + index] != 0) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /// Tests whether a supported tagged signature starts at [relativeOffset].
-  static bool _hasTaggedSignature(PsBinaryReader reader, int relativeOffset) {
-    if (relativeOffset < 0 || reader.remaining < relativeOffset + 4) {
-      return false;
-    }
-    final int offset = reader.offset + relativeOffset;
-    return _hasString(reader.bytes, offset, _taggedBlockSignature) || _hasString(reader.bytes, offset, _largeTaggedBlockSignature);
-  }
-
-  /// Tests whether the current tagged block uses a 64-bit payload length.
-  static bool _hasLargeTaggedSignature(PsBinaryReader reader) => _hasString(reader.bytes, reader.offset, _largeTaggedBlockSignature);
 
   /// Tests whether [bytes] contains [value] at [offset].
   static bool _hasString(Uint8List bytes, int offset, String value) {

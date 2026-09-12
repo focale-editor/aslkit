@@ -16,42 +16,8 @@ enum AslContainerKind {
   stylesPalette,
 }
 
-/// One tagged trailer block following the declared style records.
-final class AslTaggedBlock {
-  /// Four-byte Photoshop signature, normally `8BIM`.
-  final String signature;
-
-  /// Four-byte block key, such as `phry`.
-  final String key;
-
-  /// Absolute offset of the block signature.
-  final int offset;
-
-  /// Payload length exactly as declared in the block header.
-  final int declaredLength;
-
-  /// Unpadded payload, or an empty list when preservation was disabled.
-  final Uint8List data;
-
-  /// Number of payload bytes physically available in the decoded input.
-  final int dataByteCount;
-
-  /// Optional alignment bytes before a following block or end-of-file.
-  final Uint8List paddingData;
-
-  /// Creates an immutable tagged trailer block.
-  AslTaggedBlock({
-    required this.signature,
-    required this.key,
-    required this.offset,
-    required this.declaredLength,
-    required Uint8List data,
-    int? dataByteCount,
-    required Uint8List paddingData,
-  }) : dataByteCount = dataByteCount ?? data.length,
-       data = Uint8List.fromList(data).asUnmodifiableView(),
-       paddingData = Uint8List.fromList(paddingData).asUnmodifiableView();
-}
+/// Backward-compatible name for a shared Photoshop tagged block.
+typedef AslTaggedBlock = PsTaggedBlock;
 
 /// Complete decoded contents of one Photoshop layer-style library.
 final class AslFile {

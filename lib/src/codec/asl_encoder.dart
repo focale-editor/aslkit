@@ -125,12 +125,22 @@ final class AslEncoder extends Converter<AslFile, List<int>> {
       return;
     }
 
-    final PsBinaryWriter record = PsBinaryWriter()
-      ..writeUint32(style.identificationDescriptorVersion ?? _descriptorVersion)
-      ..writeBytes(PsDescriptorCodec.encode(identification))
-      ..writeUint32(style.styleDescriptorVersion ?? _descriptorVersion)
-      ..writeBytes(PsDescriptorCodec.encode(information))
-      ..writeBytes(style.recordTrailingData);
+    final PsBinaryWriter record = PsBinaryWriter();
+    PsVersionedDescriptorCodec.write(
+      record,
+      PsVersionedDescriptor(
+        version: style.identificationDescriptorVersion ?? _descriptorVersion,
+        descriptor: identification,
+      ),
+    );
+    PsVersionedDescriptorCodec.write(
+      record,
+      PsVersionedDescriptor(
+        version: style.styleDescriptorVersion ?? _descriptorVersion,
+        descriptor: information,
+      ),
+    );
+    record.writeBytes(style.recordTrailingData);
     if (options.mode == AslEncodeMode.strict) {
       record.writeZeros((4 - record.length % 4) % 4);
     }
@@ -150,16 +160,12 @@ final class AslEncoder extends Converter<AslFile, List<int>> {
     PsBinaryWriter writer,
     AslTaggedBlock block,
     AslEncodeOptions options,
-  ) {
-    final bool wide = block.signature == '8B64';
-    final int length = options.mode == AslEncodeMode.permissive ? block.declaredLength : block.data.length;
-    writer
-      ..writeString(block.signature)
-      ..writeString(block.key)
-      ..writeLength(length, wide: wide)
-      ..writeBytes(block.data)
-      ..writeBytes(block.paddingData);
-  }
+  ) => PsTaggedBlockCodec.write(
+    writer,
+    block,
+    preserveDeclaredLength: options.mode == AslEncodeMode.permissive,
+    preservePadding: true,
+  );
 
   /// Checks that every emitted field and required payload is representable.
   static void _validateRepresentable(AslFile file, AslEncodeOptions options) {
@@ -275,9 +281,6 @@ final class AslEncoder extends Converter<AslFile, List<int>> {
     }
     if (information.value('documentMode') is! PsObjectValue) {
       throw AslWriteException(message: 'Style ${style.index + 1} requires an object-shaped `documentMode` item');
-    }
-    if (information.value('Lefx') is! PsObjectValue && information.value('blendOptions') is! PsObjectValue) {
-      throw AslWriteException(message: 'Style ${style.index + 1} requires layer effects or blending options');
     }
     if (style.recordTrailingData.length > 3 || _containsNonzero(style.recordTrailingData)) {
       throw AslWriteException(message: 'Style ${style.index + 1} has invalid descriptor extension bytes');

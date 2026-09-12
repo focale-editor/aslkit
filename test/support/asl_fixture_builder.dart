@@ -83,7 +83,7 @@ abstract final class AslFixtureBuilder {
   static Uint8List style({
     required String name,
     required String id,
-    required PsDescriptor layerEffects,
+    required PsDescriptor? layerEffects,
     PsDescriptor? blendOptions,
     PsDescriptor? documentMode,
     int identificationVersion = 16,
@@ -113,10 +113,11 @@ abstract final class AslFixtureBuilder {
           key: 'documentMode',
           value: PsObjectValue(value: mode),
         ),
-        PsDescriptorItem(
-          key: 'Lefx',
-          value: PsObjectValue(value: layerEffects),
-        ),
+        if (layerEffects != null)
+          PsDescriptorItem(
+            key: 'Lefx',
+            value: PsObjectValue(value: layerEffects),
+          ),
         if (blendOptions != null)
           PsDescriptorItem(
             key: 'blendOptions',
