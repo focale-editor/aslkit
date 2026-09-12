@@ -1,5 +1,10 @@
 # 📰 AslKit changelog
 
+## v0.2.0
+Released on September 12, 2026.
+
+* **BREAKING REFACTOR**: Delegate shared Photoshop structures to `pscore` and support effectless styles. ([#9432990](https://github.com/focale-editor/aslkit/commit/9432990))
+
 ## v0.1.1
 Released on September 12, 2026.
 
