@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="screenshots/overview.png" alt="AslKit package illustration" width="180">
+</p>
+
 # AslKit
 
 AslKit is a pure Dart codec for Adobe Photoshop Layer Style (`.asl`) libraries. It decodes and writes standalone libraries, recognizes `Styles.psp` payloads, exposes complete Photoshop Action Descriptors, renders embedded pattern tiles through PsCore, and preserves bounded data that a newer Photoshop release may add.
@@ -125,3 +129,7 @@ See [docs/ASL.md](docs/ASL.md) for the binary layout, descriptor mapping, recove
 - [Patchy Photoshop compatibility notes](https://github.com/SethRobinson/Patchy/blob/main/docs/ps-compat.md)
 
 AslKit is an independent implementation and is not affiliated with or endorsed by Adobe.
+
+---
+
+Built for **[Focale](https://focale-editor.app)**, an advanced local image editor. Discover what these packages make possible in a real creative workflow.
