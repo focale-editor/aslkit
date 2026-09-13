@@ -1,5 +1,10 @@
 # 📰 AslKit changelog
 
+## v0.2.1
+Released on September 13, 2026.
+
+* **DOCS**: Added contributing guide, package screenshot, and pubspec metadata. ([#ebdb43a](https://github.com/focale-editor/aslkit/commit/ebdb43a))
+
 ## v0.2.0
 Released on September 12, 2026.
 
