@@ -1,5 +1,10 @@
 # 📰 AslKit changelog
 
+## v0.2.2
+Released on September 22, 2026.
+
+* **FEAT**: Now supporting web runtimes in unsigned integer bounds validation. ([#5de40e9](https://github.com/focale-editor/aslkit/commit/5de40e9))
+
 ## v0.2.1
 Released on September 13, 2026.
 
