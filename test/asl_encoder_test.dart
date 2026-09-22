@@ -8,6 +8,19 @@ import 'support/asl_fixture_builder.dart';
 
 /// Exercises editable ASL models and strict encoder validation.
 void main() {
+  test('authored wide tagged blocks encode and decode on every runtime', () {
+    final AslFile source = AslFile.editable(
+      styles: [],
+      taggedBlocks: [
+        AslTaggedBlock(signature: '8B64', key: 'test', offset: -1, declaredLength: 3, data: Uint8List.fromList([17, 34, 51]), dataByteCount: 3, paddingData: Uint8List(1)),
+      ],
+    );
+    final Uint8List bytes = AslEncoder.encode(source);
+    final AslFile restored = AslDecoder.decode(bytes);
+    check(restored.taggedBlocks.single.signature).equals('8B64');
+    check(restored.taggedBlocks.single.data).deepEquals([17, 34, 51]);
+  });
+
   group('AslEncoder', () {
     test('creates a Photoshop-shaped file from an editable style', () {
       final AslStyle style = AslStyle.editable(
