@@ -1,23 +1,8 @@
 import 'package:aslkit/src/model/asl_style.dart';
 import 'package:pscore/pscore.dart';
 
-/// Identifies the role of one slot in Photoshop's optional style hierarchy.
-enum AslHierarchyEntryKind {
-  /// Opens a named style group.
-  groupStart,
-
-  /// Closes the most recently opened style group.
-  groupEnd,
-
-  /// Refers to a style preset.
-  preset,
-
-  /// Preserves an intentionally empty hierarchy slot.
-  empty,
-
-  /// Preserves an object class not understood by this release.
-  unknown,
-}
+/// Backward-compatible name for the shared hierarchy-slot role.
+typedef AslHierarchyEntryKind = PsPresetHierarchyEntryKind;
 
 /// One ordered item from a trailing Photoshop `phry` hierarchy descriptor.
 final class AslHierarchyEntry {

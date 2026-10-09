@@ -137,13 +137,7 @@ final class AslEncodeOptions {
 }
 
 /// Describes a recoverable compatibility issue found while decoding.
-final class AslWarning {
-  /// Human-readable explanation of the compatibility issue.
-  final String message;
-
-  /// Absolute byte offset associated with the issue, when known.
-  final int? offset;
-
+final class AslWarning extends PsWarning {
   /// Zero-based pattern position associated with the issue, when known.
   final int? patternIndex;
 
@@ -155,63 +149,47 @@ final class AslWarning {
 
   /// Creates a warning with optional source context.
   const AslWarning({
-    required this.message,
-    this.offset,
+    required super.message,
+    super.offset,
     this.patternIndex,
     this.styleIndex,
     this.blockKey,
   });
 
   @override
-  String toString() {
-    final String location = offset == null ? '' : ' at byte $offset';
+  String get typeName => 'AslWarning';
+
+  @override
+  String get context {
     final int? currentPatternIndex = patternIndex;
     final int? currentStyleIndex = styleIndex;
     final String pattern = currentPatternIndex == null ? '' : ' in pattern ${currentPatternIndex + 1}';
     final String style = currentStyleIndex == null ? '' : ' in style ${currentStyleIndex + 1}';
     final String block = blockKey == null ? '' : ' in $blockKey';
-    return 'AslWarning$location$pattern$style$block: $message';
+    return '$pattern$style$block';
   }
 }
 
 /// Reports malformed, truncated, unsupported, or unsafe ASL input.
-final class AslFormatException implements FormatException {
-  /// Human-readable explanation of the malformed data.
-  @override
-  final String message;
-
-  /// Input associated with the failure, when useful.
-  @override
-  final Object? source;
-
-  /// Absolute byte offset associated with the failure, when known.
-  @override
-  final int? offset;
-
-  /// Creates an ASL format error at an optional absolute byte [offset].
+final class AslFormatException extends PsFormatException {
+  /// Creates an error at an optional absolute byte [offset].
   const AslFormatException({
-    required this.message,
-    this.source,
-    this.offset,
+    required super.message,
+    super.source,
+    super.offset,
   });
 
   @override
-  String toString() {
-    final String location = offset == null ? '' : ' at byte $offset';
-    return 'AslFormatException$location: $message';
-  }
+  String get typeName => 'AslFormatException';
 }
 
 /// Reports model data that cannot be represented by the requested ASL output.
-final class AslWriteException implements Exception {
-  /// Explains why encoding failed.
-  final String message;
-
+final class AslWriteException extends PsWriteException {
   /// Creates an encoding error with a user-facing [message].
   const AslWriteException({
-    required this.message,
+    required super.message,
   });
 
   @override
-  String toString() => 'AslWriteException: $message';
+  String get typeName => 'AslWriteException';
 }

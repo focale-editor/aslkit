@@ -3,7 +3,7 @@ import 'package:aslkit/src/model/asl_style.dart';
 import 'package:pscore/pscore.dart';
 
 /// Receives a recoverable hierarchy compatibility issue.
-typedef AslHierarchyIssueHandler = void Function(String message);
+typedef AslHierarchyIssueHandler = PsPresetHierarchyIssueHandler;
 
 /// Adapts the shared Photoshop hierarchy mapper to ASL style entries.
 abstract final class AslHierarchyMapper {
@@ -30,7 +30,7 @@ abstract final class AslHierarchyMapper {
     ))
       AslHierarchyEntry(
         index: entry.index,
-        kind: _kind(entry.kind),
+        kind: entry.kind,
         depth: entry.depth,
         classId: entry.classId,
         name: entry.name,
@@ -39,13 +39,4 @@ abstract final class AslHierarchyMapper {
         rawDescriptor: entry.rawDescriptor,
       ),
   ]);
-
-  /// Converts the shared semantic role to its compatibility enum.
-  static AslHierarchyEntryKind _kind(PsPresetHierarchyEntryKind kind) => switch (kind) {
-    PsPresetHierarchyEntryKind.groupStart => AslHierarchyEntryKind.groupStart,
-    PsPresetHierarchyEntryKind.groupEnd => AslHierarchyEntryKind.groupEnd,
-    PsPresetHierarchyEntryKind.preset => AslHierarchyEntryKind.preset,
-    PsPresetHierarchyEntryKind.empty => AslHierarchyEntryKind.empty,
-    PsPresetHierarchyEntryKind.unknown => AslHierarchyEntryKind.unknown,
-  };
 }

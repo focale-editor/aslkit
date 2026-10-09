@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:aslkit/src/codec/integer_limits_native.dart' if (dart.library.js_interop) 'package:aslkit/src/codec/integer_limits_web.dart';
 import 'package:aslkit/src/model/asl_file.dart';
 import 'package:aslkit/src/model/asl_options.dart';
 import 'package:aslkit/src/model/asl_pattern.dart';
@@ -311,7 +310,7 @@ final class AslEncoder extends Converter<AslFile, List<int>> {
   /// Requires [value] to fit an unsigned integer of [bits] bits.
   static void _requireUnsigned(int value, int bits, String label) {
     final int maximum = switch (bits) {
-      64 => maximumWideUnsigned,
+      64 => psMaxExactInteger,
       // JavaScript shifts operate on 32 bits, so `1 << 32` wraps to one.
       32 => 0xffffffff,
       _ => (1 << bits) - 1,
