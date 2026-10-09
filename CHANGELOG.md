@@ -1,5 +1,10 @@
 # 📰 AslKit changelog
 
+## v0.2.4
+Released on October 9, 2026.
+
+* **REFACTOR**: Now relying more on `pscore`. ([#1445887](https://github.com/focale-editor/aslkit/commit/1445887))
+
 ## v0.2.3
 Released on October 5, 2026.
 

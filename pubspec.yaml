@@ -1,6 +1,6 @@
 name: aslkit
 description: A pure Dart codec for Adobe Photoshop ASL layer-style libraries.
-version: 0.2.3
+version: 0.2.4
 homepage: https://github.com/focale-editor/aslkit
 repository: https://github.com/focale-editor/aslkit
 
