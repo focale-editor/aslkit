@@ -1,5 +1,11 @@
 # 📰 AslKit changelog
 
+## v0.3.0
+Released on October 10, 2026.
+
+* **FEAT**: Added legacy style libraries and editable embedded patterns. ([#a469d8d](https://github.com/focale-editor/aslkit/commit/a469d8d))
+* **BREAKING CHORE**: Updated pscore dependency to 0.2.0. ([#c47396e](https://github.com/focale-editor/aslkit/commit/c47396e))
+
 ## v0.2.4
 Released on October 9, 2026.
 
