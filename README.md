@@ -12,6 +12,7 @@ AslKit is a pure Dart codec for Adobe Photoshop Layer Style (`.asl`) libraries. 
 - Version 3 embedded-pattern sections with grayscale, indexed, RGB, CMYK, multichannel, duotone, Lab, and bitmap records.
 - Raw and PackBits pattern channels at 1, 8, 16, or 32 bits where PsCore can decode them.
 - Both version 16 descriptors in every style: identification (`Nm  ` and `Idnt`) and style information (`documentMode`, `Lefx`, and `blendOptions`).
+- Version 1 libraries written by Photoshop CS2 and earlier, whose styles share one descriptor list (`StyD`); they decode to the same `AslStyle` model and are written back in that layout.
 - Single and multi-instance shadows, glows, bevel and emboss, Satin, color/gradient/pattern overlays, and strokes.
 - Typed views for colors, gradients, contours, pattern references, offsets, effect geometry and lighting, bevel/glow/stroke settings, Blend If ranges, channel restrictions, and captured document mode.
 - Optional `8BIM`/`8B64` tagged trailers and `phry` preset hierarchies.
@@ -79,7 +80,14 @@ final Uint8List reconstructed = AslEncoder.encode(
 );
 ```
 
-Embedded pattern pixels are decoded semantically but currently written from their preserved binary record. Keep `preservePatternRecordData` enabled when an ASL file containing patterns must be saved again. Creating new pattern pixel records from raw images belongs in a future shared PsCore encoder.
+Decoded patterns are written back from their preserved binary record, so an unchanged library re-encodes byte for byte. To add or replace a pattern, build it with `PsPattern.fromRgba8` and wrap it with `AslPatternRecord.create`; the encoder then writes it from its pixels through PsCore's shared pattern encoder:
+
+```dart
+final AslFile library = AslFile.editable(
+  styles: styles,
+  patternRecords: [AslPatternRecord.create(PsPattern.fromRgba8(id: id, name: 'Tile', width: 16, height: 16, rgba: pixels))],
+);
+```
 
 ## Reusable `dart:convert` API
 

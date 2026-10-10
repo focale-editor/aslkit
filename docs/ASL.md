@@ -21,6 +21,10 @@ A `Styles.psp` payload starts directly with `8BSL`; it has no leading file-versi
 
 An empty pattern section has length zero and contains no count field. A nonempty section is scanned until its declared byte boundary. Each record contains a 32-bit payload length, the shared Photoshop pattern body, and zero to three alignment bytes. `PsPatternRecordDecoder` in PsCore handles virtual-memory channel slots, indexed palettes, raw samples, and PackBits rows.
 
+
+## Version 1 libraries
+
+Photoshop CS2 and earlier wrote version 1 libraries: a 16-bit version (1), `8BSL`, a pattern-section version (2) and the pattern section, then a single version 16 descriptor whose `StyD` list holds one object per style. Each object carries the name (`Nm  `), the effects (`Lefx`), the blending options, and ImageReady rollover states; there is no identifier, style count, or tagged block. `AslStyle.fromLegacyDescriptor` exposes each entry through the usual typed views, and the root descriptor is kept in `AslFile.legacyStyleList` so encoding writes the version 1 layout again with the current styles. The five version 1 libraries shipped with Photoshop CS2 decode without warnings and re-encode byte for byte.
 ## Style records
 
 Each style has a 32-bit byte length followed by two serialized Photoshop Action Descriptors:
@@ -108,7 +112,7 @@ Strict encoding produces the canonical version-2/version-3 envelope, version-16 
 
 Permissive encoding reconstructs preserved record payloads, declared counts and lengths, padding, tagged blocks, and trailing bytes. Decoded styles are always re-encoded from their descriptors; raw style bytes never override an intentional descriptor edit. Valid decoded files are expected to reconstruct byte for byte because PsCore retains descriptor identifier encodings and item order.
 
-Pattern records do not yet have a semantic pixel writer. They are written from `AslPatternRecord.data` or `PsPattern.recordData`, so `preservePatternRecordData` must remain enabled for round trips involving patterns. This restriction does not affect decoding, preview rendering, descriptor editing, or pattern-reference resolution.
+Each pattern record is written from the first available source: the preserved `AslPatternRecord.data`, then `PsPattern.recordData`, then the pattern's pixels through `PsPatternRecordEncoder`. Unchanged decoded records therefore round-trip byte for byte, while records made with `AslPatternRecord.create` are encoded from their channels. A record with neither preserved bytes nor a decoded pattern cannot be written.
 
 ## Focale integration notes
 

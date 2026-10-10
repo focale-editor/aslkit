@@ -81,6 +81,34 @@ final class AslStyle {
        paddingData = Uint8List.fromList(paddingData).asUnmodifiableView(),
        recordData = recordData == null ? null : Uint8List.fromList(recordData).asUnmodifiableView();
 
+  /// Reads one entry of a version 1 style list.
+  ///
+  /// Such entries carry the name (`Nm  `), effects, and blending options in a
+  /// single descriptor, with no separate identification descriptor or
+  /// identifier.
+  factory AslStyle.fromLegacyDescriptor(PsDescriptor descriptor, {required int index, int sourceOffset = -1}) {
+    final String? serializedName = descriptor.stringValue('Nm  ');
+    return AslStyle(
+      index: index,
+      sourceOffset: sourceOffset,
+      declaredLength: 0,
+      identificationDescriptorVersion: null,
+      identificationDescriptor: null,
+      styleDescriptorVersion: null,
+      styleDescriptor: null,
+      serializedName: serializedName,
+      name: serializedName == null ? null : _resolveZString(_trimTerminalNulls(serializedName)),
+      id: null,
+      documentMode: null,
+      layerEffects: null,
+      blendOptions: null,
+      recordTrailingData: Uint8List(0),
+      paddingData: Uint8List(0),
+      recordData: null,
+      decodeError: null,
+    ).withStyleDescriptor(descriptor);
+  }
+
   /// Creates a new editable style from complete descriptor objects.
   factory AslStyle.editable({
     required String name,

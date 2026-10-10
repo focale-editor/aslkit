@@ -75,6 +75,13 @@ final class AslFile {
   /// Complete source bytes when preservation was requested.
   final Uint8List? sourceData;
 
+  /// Root descriptor of a version 1 library, whose `StyD` list holds every style.
+  ///
+  /// Photoshop CS2 and earlier stored styles this way, without separate style
+  /// records or tagged blocks. Encoding a file that has it writes the version 1
+  /// layout again, with the current [styles] in the list.
+  final PsDescriptor? legacyStyleList;
+
   /// Last style for every non-empty identifier.
   final Map<String, AslStyle> _stylesById;
 
@@ -101,6 +108,7 @@ final class AslFile {
     required List<AslWarning> warnings,
     required this.decodedPixelBytes,
     required Uint8List? sourceData,
+    this.legacyStyleList,
   }) : patternRecords = List<AslPatternRecord>.unmodifiable(patternRecords),
        patternSectionTrailingData = Uint8List.fromList(patternSectionTrailingData).asUnmodifiableView(),
        styles = List<AslStyle>.unmodifiable(styles),

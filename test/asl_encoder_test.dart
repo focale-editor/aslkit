@@ -8,6 +8,98 @@ import 'support/asl_fixture_builder.dart';
 
 /// Exercises editable ASL models and strict encoder validation.
 void main() {
+  test('reads and rewrites the version 1 layout of Photoshop CS2', () {
+    PsDescriptor style(String name) => PsDescriptor(
+      name: '',
+      classId: 'null',
+      items: [
+        const PsDescriptorItem(
+          key: 'Lefx',
+          value: PsObjectValue(
+            value: PsDescriptor(
+              name: '',
+              classId: 'null',
+              items: [PsDescriptorItem(key: 'masterFXSwitch', value: PsBooleanValue(value: true))],
+            ),
+          ),
+        ),
+        PsDescriptorItem(
+          key: 'Nm  ',
+          value: PsStringValue(value: '$name\u0000'),
+        ),
+      ],
+    );
+    final PsBinaryWriter writer = PsBinaryWriter()
+      ..writeUint16(1)
+      ..writeString('8BSL')
+      ..writeUint16(2)
+      ..writeUint32(0);
+    PsVersionedDescriptorCodec.write(
+      writer,
+      PsVersionedDescriptor(
+        descriptor: PsDescriptor(
+          name: '',
+          classId: 'null',
+          items: [
+            PsDescriptorItem(
+              key: 'StyD',
+              value: PsListValue(
+                values: [
+                  PsObjectValue(value: style('Neon')),
+                  PsObjectValue(value: style('Glass')),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    final Uint8List bytes = writer.takeBytes();
+
+    final AslFile file = AslDecoder.decode(bytes, options: const AslDecodeOptions(mode: AslDecodeMode.strict));
+
+    check(file.version).equals(1);
+    check(file.styles.map((style) => style.name).toList()).deepEquals(['Neon', 'Glass']);
+    check(file.styles.first.layerEffects).isNotNull();
+    check(AslEncoder.encode(file)).deepEquals(bytes);
+  });
+
+  test('writes new and edited patterns from their pixels', () {
+    final Uint8List rgba = Uint8List.fromList([255, 0, 0, 255, 0, 0, 255, 128, 0, 255, 0, 255, 10, 20, 30, 0]);
+    final AslFile source = AslFile.editable(
+      styles: [],
+      patternRecords: [AslPatternRecord.create(PsPattern.fromRgba8(id: 'tile-id', name: 'Tile', width: 2, height: 2, rgba: rgba))],
+    );
+
+    final Uint8List bytes = AslEncoder.encode(source);
+    final AslFile decoded = AslDecoder.decode(bytes, options: const AslDecodeOptions(mode: AslDecodeMode.strict));
+    final PsPattern pattern = decoded.patternRecords.single.pattern!;
+
+    check(pattern.id).equals('tile-id');
+    check(pattern.name).equals('Tile');
+    check(pattern.renderRgba8().rgba).deepEquals(rgba);
+    // A decoded record keeps its exact bytes; replacing it re-encodes the new pixels.
+    check(AslEncoder.encode(decoded)).deepEquals(bytes);
+    final AslFile edited = AslFile.editable(
+      styles: [],
+      patternRecords: [
+        AslPatternRecord.create(PsPattern.fromRgba8(id: 'tile-id', name: 'Edited', width: 1, height: 1, rgba: Uint8List.fromList([1, 2, 3, 255]))),
+      ],
+    );
+    check(AslDecoder.decode(AslEncoder.encode(edited)).patternRecords.single.pattern!.name).equals('Edited');
+  });
+
+  test('rejects records with neither preserved bytes nor pixels', () {
+    final AslFile source = AslFile.editable(
+      styles: [],
+      patternRecords: [
+        AslPatternRecord(index: 0, sourceOffset: -1, declaredLength: 0, pattern: null, data: Uint8List(0), paddingData: Uint8List(0), decodeError: 'broken'),
+      ],
+    );
+
+    check(() => AslEncoder.encode(source, options: const AslEncodeOptions(mode: AslEncodeMode.permissive))).throws<AslWriteException>();
+  });
+
   test('authored wide tagged blocks encode and decode on every runtime', () {
     final AslFile source = AslFile.editable(
       styles: [],

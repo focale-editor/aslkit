@@ -42,6 +42,19 @@ final class AslPatternRecord {
        data = Uint8List.fromList(data).asUnmodifiableView(),
        paddingData = Uint8List.fromList(paddingData).asUnmodifiableView();
 
+  /// Creates a record for a new or edited [pattern], which the encoder writes from its pixels.
+  ///
+  /// Build [pattern] with `PsPattern.fromRgba8`, or edit a decoded one.
+  factory AslPatternRecord.create(PsPattern pattern, {int index = 0}) => AslPatternRecord(
+    index: index,
+    sourceOffset: -1,
+    declaredLength: 0,
+    pattern: pattern,
+    data: Uint8List(0),
+    paddingData: Uint8List(0),
+    decodeError: null,
+  );
+
   /// Whether [pattern] was decoded successfully.
   bool get isDecoded => pattern != null;
 }

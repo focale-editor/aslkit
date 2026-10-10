@@ -37,6 +37,12 @@ final class AslDecoder extends Converter<List<int>, AslFile> {
   /// Standalone ASL version currently written by Photoshop.
   static const int _fileVersion = 2;
 
+  /// Standalone ASL version written by Photoshop CS2 and earlier.
+  static const int _legacyFileVersion = 1;
+
+  /// Embedded-pattern section version paired with [_legacyFileVersion].
+  static const int _legacyPatternsVersion = 2;
+
   /// Embedded-pattern section version currently written by Photoshop.
   static const int _patternsVersion = 3;
 
@@ -123,15 +129,19 @@ final class AslDecoder extends Converter<List<int>, AslFile> {
       patternsVersion: patternsVersion,
       declaredPatternSectionLength: declaredPatternSectionLength,
     );
-    if (version != null && version != _fileVersion) {
+    if (version != null && version != _fileVersion && version != _legacyFileVersion) {
       context.issue('ASL container version $version is not currently defined', 0);
     }
-    if (patternsVersion != _patternsVersion) {
+    if (patternsVersion != _patternsVersion && !(version == _legacyFileVersion && patternsVersion == _legacyPatternsVersion)) {
       context.issue('ASL pattern section version $patternsVersion is not currently defined', patternsVersionOffset);
     }
 
     final PsBinaryReader patterns = reader.readReader(declaredPatternSectionLength);
     _decodePatterns(patterns, context);
+    if (version == _legacyFileVersion) {
+      _decodeLegacyStyles(reader, context);
+      return context.build();
+    }
     final int styleCountOffset = reader.offset;
     context.declaredStyleCount = reader.readUint32();
     if (context.declaredStyleCount > options.maxStyles) {
@@ -146,6 +156,39 @@ final class AslDecoder extends Converter<List<int>, AslFile> {
       _decodeTaggedBlocks(reader, context);
     }
     return context.build();
+  }
+
+  /// Decodes the single descriptor whose `StyD` list holds every version 1 style.
+  static void _decodeLegacyStyles(PsBinaryReader reader, _AslDecodeContext context) {
+    final int descriptorOffset = reader.baseOffset + reader.offset;
+    final PsVersionedDescriptor versioned = PsVersionedDescriptorCodec.read(reader, options: context.options.descriptorOptions);
+    if (versioned.version != _descriptorVersion) {
+      context.issue('ASL style-list descriptor version ${versioned.version} is not currently defined', descriptorOffset);
+    }
+    final List<PsDescriptorValue>? entries = versioned.descriptor.listValue('StyD');
+    if (entries == null) {
+      throw AslFormatException(message: 'The version 1 style descriptor has no StyD list', source: context.source, offset: descriptorOffset);
+    }
+    if (entries.length > context.options.maxStyles) {
+      throw AslFormatException(message: 'ASL style count ${entries.length} exceeds the configured ${context.options.maxStyles} limit', source: context.source, offset: descriptorOffset);
+    }
+    context
+      ..legacyStyleList = versioned.descriptor
+      ..declaredStyleCount = entries.length;
+    for (int index = 0; index < entries.length; index++) {
+      context.styleIndex = index;
+      final PsDescriptor? descriptor = entries[index].asObject();
+      if (descriptor == null) {
+        context.issue('Version 1 style ${index + 1} is not a descriptor object', descriptorOffset);
+        continue;
+      }
+      context.addStyle(AslStyle.fromLegacyDescriptor(descriptor, index: index, sourceOffset: descriptorOffset));
+    }
+    context.styleIndex = null;
+    if (!reader.isAtEnd) {
+      context.setTrailing(reader.readBytes(reader.remaining));
+      context.issue('${context.trailingData.length} unrecognized bytes follow the version 1 style list', reader.baseOffset + reader.offset);
+    }
   }
 
   /// Decodes every length-prefixed record in the bounded pattern section.
@@ -704,6 +747,9 @@ final class _AslDecodeContext {
   /// Flattened hierarchy entries decoded so far.
   final List<AslHierarchyEntry> hierarchy = <AslHierarchyEntry>[];
 
+  /// Root descriptor of a version 1 style list, when the file uses that layout.
+  PsDescriptor? legacyStyleList;
+
   /// Hierarchy root descriptors decoded so far.
   final List<PsDescriptor> hierarchyDescriptors = <PsDescriptor>[];
 
@@ -881,5 +927,6 @@ final class _AslDecodeContext {
     warnings: warnings,
     decodedPixelBytes: decodedPixelBytes,
     sourceData: options.preserveSourceData ? source : null,
+    legacyStyleList: legacyStyleList,
   );
 }

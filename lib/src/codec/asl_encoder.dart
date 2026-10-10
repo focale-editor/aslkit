@@ -62,8 +62,16 @@ final class AslEncoder extends Converter<AslFile, List<int>> {
         ..writeString(file.signature)
         ..writeUint16(file.patternsVersion)
         ..writeUint32(patternBytes.length)
-        ..writeBytes(patternBytes)
-        ..writeUint32(options.mode == AslEncodeMode.permissive ? file.declaredStyleCount : file.styles.length);
+        ..writeBytes(patternBytes);
+      final PsDescriptor? legacyStyleList = file.legacyStyleList;
+      if (legacyStyleList != null) {
+        _writeLegacyStyles(writer, legacyStyleList, file);
+        if (options.includeTrailingData) {
+          writer.writeBytes(file.trailingData);
+        }
+        return writer.takeBytes();
+      }
+      writer.writeUint32(options.mode == AslEncodeMode.permissive ? file.declaredStyleCount : file.styles.length);
       for (final AslStyle style in file.styles) {
         _writeStyle(writer, style, options);
       }
@@ -85,15 +93,27 @@ final class AslEncoder extends Converter<AslFile, List<int>> {
     }
   }
 
+  /// Writes the version 1 style list, replacing its entries with the current styles.
+  static void _writeLegacyStyles(PsBinaryWriter writer, PsDescriptor root, AslFile file) {
+    final List<PsDescriptorValue> entries = [];
+    for (final AslStyle style in file.styles) {
+      final PsDescriptor? descriptor = style.styleDescriptor;
+      if (descriptor == null) {
+        throw AslWriteException(message: 'Version 1 style ${style.index + 1} has no style descriptor');
+      }
+      entries.add(PsObjectValue(value: descriptor));
+    }
+    PsVersionedDescriptorCodec.write(writer, PsVersionedDescriptor(descriptor: root.withValue('StyD', PsListValue(values: entries))));
+  }
+
   /// Writes one embedded pattern and its four-byte alignment.
   static void _writePattern(
     PsBinaryWriter writer,
     AslPatternRecord record,
     AslEncodeOptions options,
   ) {
-    final Uint8List? decodedData = record.pattern?.recordData;
-    final Uint8List data = record.data.isNotEmpty ? record.data : decodedData ?? Uint8List(0);
-    final int declaredLength = options.mode == AslEncodeMode.permissive ? record.declaredLength : data.length;
+    final Uint8List data = _payload(record, options);
+    final int declaredLength = options.mode == AslEncodeMode.permissive && record.data.isNotEmpty ? record.declaredLength : data.length;
     writer
       ..writeUint32(declaredLength)
       ..writeBytes(data);
@@ -103,6 +123,26 @@ final class AslEncoder extends Converter<AslFile, List<int>> {
     } else {
       writer.writeZeros(expectedPaddingLength);
     }
+  }
+
+  /// Returns the bytes written for [record]: its preserved payload, or its pattern encoded from pixels.
+  static Uint8List _payload(AslPatternRecord record, AslEncodeOptions options) {
+    final PsPattern? pattern = record.pattern;
+    if (record.data.isNotEmpty) {
+      return record.data;
+    }
+    final Uint8List? preserved = pattern?.recordData;
+    if (preserved != null && preserved.isNotEmpty) {
+      return preserved;
+    }
+    if (pattern == null) {
+      return Uint8List(0);
+    }
+    return PsPatternRecordEncoder.encode(
+      pattern: pattern,
+      kind: PsPatternRecordKind.embedded,
+      options: PsPatternEncodeOptions(mode: options.mode == AslEncodeMode.strict ? PsPatternEncodeMode.strict : PsPatternEncodeMode.permissive),
+    );
   }
 
   /// Writes one decoded descriptor pair or one preserved opaque style.
@@ -184,13 +224,15 @@ final class AslEncoder extends Converter<AslFile, List<int>> {
     }
     _requireUnsigned(file.declaredStyleCount, 32, 'ASL declared style count');
     for (final AslPatternRecord record in file.patternRecords) {
-      final Uint8List? decodedData = record.pattern?.recordData;
-      final int availableLength = record.data.isNotEmpty ? record.data.length : decodedData?.length ?? 0;
-      if (availableLength != record.dataByteCount) {
-        throw AslWriteException(message: 'Pattern ${record.index + 1} has no preserved record payload');
+      if (record.data.isNotEmpty) {
+        if (record.data.length != record.dataByteCount) {
+          throw AslWriteException(message: 'Pattern ${record.index + 1} has an incomplete preserved payload');
+        }
+        _requireUnsigned(record.data.length, 32, 'Pattern ${record.index + 1} payload length');
+        _requireUnsigned(record.declaredLength, 32, 'Pattern ${record.index + 1} declared length');
+      } else if (record.pattern == null) {
+        throw AslWriteException(message: 'Pattern ${record.index + 1} has neither a preserved payload nor decoded pixels');
       }
-      _requireUnsigned(availableLength, 32, 'Pattern ${record.index + 1} payload length');
-      _requireUnsigned(record.declaredLength, 32, 'Pattern ${record.index + 1} declared length');
     }
     for (final AslStyle style in file.styles) {
       _requireUnsigned(style.declaredLength, 32, 'Style ${style.index + 1} declared length');
@@ -220,10 +262,11 @@ final class AslEncoder extends Converter<AslFile, List<int>> {
     if (file.signature != _fileSignature) {
       throw const AslWriteException(message: 'Strict ASL output requires the "$_fileSignature" signature');
     }
-    if (file.containerKind == AslContainerKind.styleLibrary && file.version != _fileVersion) {
+    final bool legacy = file.legacyStyleList != null && file.version == 1 && file.patternsVersion == 2;
+    if (file.containerKind == AslContainerKind.styleLibrary && file.version != _fileVersion && !legacy) {
       throw const AslWriteException(message: 'Strict standalone ASL output requires version $_fileVersion');
     }
-    if (file.patternsVersion != _patternsVersion) {
+    if (file.patternsVersion != _patternsVersion && !legacy) {
       throw const AslWriteException(message: 'Strict ASL output requires pattern-section version $_patternsVersion');
     }
     if (options.includePatternSectionTrailingData && file.patternSectionTrailingData.isNotEmpty) {
@@ -236,13 +279,16 @@ final class AslEncoder extends Converter<AslFile, List<int>> {
       if (!record.isDecoded) {
         throw AslWriteException(message: 'Strict ASL output cannot contain opaque pattern ${record.index + 1}');
       }
-      final Uint8List? decodedData = record.pattern?.recordData;
-      final int length = record.data.isNotEmpty ? record.data.length : decodedData?.length ?? 0;
-      if (length == 0) {
-        throw AslWriteException(message: 'Pattern ${record.index + 1} has an empty payload');
-      }
     }
-    file.styles.forEach(_validateStrictStyle);
+    if (legacy) {
+      for (final AslStyle style in file.styles) {
+        if (style.styleDescriptor == null) {
+          throw AslWriteException(message: 'Strict ASL output cannot contain opaque style ${style.index + 1}');
+        }
+      }
+    } else {
+      file.styles.forEach(_validateStrictStyle);
+    }
     if (options.includeTaggedBlocks) {
       for (final AslTaggedBlock block in file.taggedBlocks) {
         if (block.signature != '8BIM' && block.signature != '8B64') {
